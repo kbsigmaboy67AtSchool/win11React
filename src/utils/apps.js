@@ -35,6 +35,12 @@ const apps = [
     action: "ACCOUNTS",
   },
   {
+    name: "Local Chat",
+    icon: "chat",
+    type: "app",
+    action: "CHAT",
+  },
+  {
     name: "Task Manager",
     icon: "taskmanager",
     type: "app",
