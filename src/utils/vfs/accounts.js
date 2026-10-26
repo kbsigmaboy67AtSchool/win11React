@@ -300,6 +300,18 @@ export async function putBlob(id, arrayBufferOrUint8) {
   });
 }
 
+
+export async function deleteFileRecord(path) {
+  if (!currentPassword) throw new Error("Locked");
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction("files", "readwrite");
+    tx.objectStore("files").delete(path);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export async function getBlob(id) {
   if (!currentPassword) return null;
   const database = await getDB();
@@ -376,6 +388,7 @@ export default {
   listChildren,
   putBlob,
   getBlob,
+  deleteFileRecord,
   scheduleAutosave,
   loadAutosavedState,
 };
