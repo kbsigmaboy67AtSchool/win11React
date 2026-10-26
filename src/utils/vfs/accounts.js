@@ -12,7 +12,7 @@ import {
   toBase64,
   fromBase64,
 } from "./crypto.js";
-import { encrypt } from "./crypto.js";
+import { encrypt, decrypt } from "./crypto.js";
 
 const ACCOUNTS_KEY = "win11_accounts_v1";
 const SESSION_KEY = "win11_active_session";
@@ -371,6 +371,221 @@ export async function loadAutosavedState() {
   return loadMeta("redux_snapshot", null);
 }
 
+/* ========== Password / username change ========== */
+
+export async function changePassword(username, oldPassword, newPassword) {
+  if (!newPassword || newPassword.length < 4) throw new Error("New password must be at least 4 characters");
+  const accounts = listAccounts();
+  const idx = accounts.findIndex((a) => a.username === username);
+  if (idx < 0) throw new Error("Account not found");
+  const ok = await verifyPassword(oldPassword, accounts[idx].pwHash);
+  if (!ok) throw new Error("Current password is incorrect");
+
+  // Re-encrypt all meta + blobs with new password is expensive; for v1 we
+  // re-hash and require re-login. Full re-encrypt of VFS can be added later.
+  const pwHash = await hashPassword(newPassword);
+  accounts[idx].pwHash = pwHash;
+  saveAccounts(accounts);
+
+  if (currentAccount?.username === username) {
+    currentPassword = newPassword;
+  }
+  return true;
+}
+
+export async function changeUsername(oldUsername, newUsername, password) {
+  newUsername = (newUsername || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  if (!newUsername || newUsername.length < 2) throw new Error("Username too short");
+  const accounts = listAccounts();
+  if (accounts.find((a) => a.username === newUsername)) throw new Error("Username already taken");
+  const idx = accounts.findIndex((a) => a.username === oldUsername);
+  if (idx < 0) throw new Error("Account not found");
+  const ok = await verifyPassword(password, accounts[idx].pwHash);
+  if (!ok) throw new Error("Password is incorrect");
+
+  // Rename IDB database is not directly supported; we keep data under old key
+  // and update the accounts list. Full migration can be a future step.
+  accounts[idx].username = newUsername;
+  if (accounts[idx].displayName === oldUsername) {
+    accounts[idx].displayName = newUsername;
+  }
+  saveAccounts(accounts);
+
+  if (currentAccount?.username === oldUsername) {
+    currentAccount = { ...currentAccount, username: newUsername };
+  }
+  return accounts[idx];
+}
+
+/* ========== Full account export / import ========== */
+
+/**
+ * Export entire account as a JSON package.
+ * @param {string} username
+ * @param {string} password - required to decrypt and (optionally) re-encrypt the package
+ * @param {{ encryptPackage?: boolean }} opts - encryptPackage defaults true
+ * @returns {Promise<object>} plain or encrypted package
+ */
+export async function exportAccount(username, password, opts = {}) {
+  const encryptPackage = opts.encryptPackage !== false;
+  const accounts = listAccounts();
+  const acc = accounts.find((a) => a.username === username);
+  if (!acc) throw new Error("Account not found");
+  const ok = await verifyPassword(password, acc.pwHash);
+  if (!ok) throw new Error("Incorrect password");
+
+  // Temporarily login if needed to read data
+  const wasUnlocked = isUnlocked() && currentAccount?.username === username;
+  if (!wasUnlocked) {
+    await login(username, password);
+  }
+
+  const database = await getDB();
+  const files = await new Promise((resolve) => {
+    const tx = database.transaction("files", "readonly");
+    const req = tx.objectStore("files").getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => resolve([]);
+  });
+  const meta = await new Promise((resolve) => {
+    const tx = database.transaction("meta", "readonly");
+    const req = tx.objectStore("meta").getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => resolve([]);
+  });
+  // Blobs: export as base64 (can be large)
+  const blobsRaw = await new Promise((resolve) => {
+    const tx = database.transaction("blobs", "readonly");
+    const req = tx.objectStore("blobs").getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => resolve([]);
+  });
+  const blobs = [];
+  for (const b of blobsRaw) {
+    try {
+      const plain = await decrypt(new Uint8Array(b.data), password);
+      blobs.push({ id: b.id, size: b.size, dataB64: toBase64(plain) });
+    } catch {
+      // skip undecryptable
+    }
+  }
+
+  // Decrypt meta for export
+  const metaPlain = [];
+  for (const m of meta) {
+    try {
+      const plain = await decryptFromBase64(m.data, password);
+      const text = new TextDecoder().decode(plain);
+      metaPlain.push({ key: m.key, value: JSON.parse(text), updated: m.updated });
+    } catch {
+      metaPlain.push({ key: m.key, value: null, updated: m.updated, error: true });
+    }
+  }
+
+  const packageData = {
+    format: "win11react-account-v1",
+    exportedAt: Date.now(),
+    account: {
+      username: acc.username,
+      displayName: acc.displayName,
+      photo: acc.photo,
+      created: acc.created,
+      lastLogin: acc.lastLogin,
+    },
+    files,
+    meta: metaPlain,
+    blobs,
+  };
+
+  if (!encryptPackage) {
+    return packageData;
+  }
+
+  // Encrypt whole package with account password
+  const encrypted = await encryptToBase64(packageData, password);
+  return {
+    format: "win11react-account-v1-encrypted",
+    username: acc.username,
+    displayName: acc.displayName,
+    exportedAt: Date.now(),
+    data: encrypted,
+  };
+}
+
+/**
+ * Import an account package (plain or encrypted JSON).
+ * Creates a new account on this device.
+ * @param {object|string} pkg - parsed object or JSON string
+ * @param {string} [password] - required if package is encrypted, or to set new password
+ * @param {{ newUsername?: string, newPassword?: string }} opts
+ */
+export async function importAccount(pkg, password, opts = {}) {
+  if (typeof pkg === "string") {
+    try {
+      pkg = JSON.parse(pkg);
+    } catch {
+      throw new Error("Invalid JSON package");
+    }
+  }
+  if (!pkg || !pkg.format) throw new Error("Unrecognized account package");
+
+  let data = pkg;
+  if (pkg.format === "win11react-account-v1-encrypted") {
+    if (!password) throw new Error("Password required to decrypt package");
+    const plain = await decryptFromBase64(pkg.data, password);
+    const text = new TextDecoder().decode(plain);
+    data = JSON.parse(text);
+  } else if (pkg.format !== "win11react-account-v1") {
+    throw new Error("Unsupported package format: " + pkg.format);
+  }
+
+  const username = (opts.newUsername || data.account?.username || "imported").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  const pass = opts.newPassword || password;
+  if (!pass || pass.length < 4) throw new Error("Password required for imported account");
+
+  // Create account (will throw if exists)
+  const acc = await createAccount({
+    username,
+    password: pass,
+    displayName: data.account?.displayName || username,
+    photo: data.account?.photo || "img/settings/defAccount.webp",
+  });
+
+  // Login to write data
+  await login(username, pass);
+
+  // Restore files
+  for (const f of data.files || []) {
+    if (f && f.path) await putFileRecord(f);
+  }
+  // Restore meta (re-encrypt with new password)
+  for (const m of data.meta || []) {
+    if (m && m.key && m.value !== undefined && !m.error) {
+      await saveMeta(m.key, m.value);
+    }
+  }
+  // Restore blobs
+  for (const b of data.blobs || []) {
+    if (b && b.id && b.dataB64) {
+      const bytes = fromBase64(b.dataB64);
+      await putBlob(b.id, bytes);
+    }
+  }
+
+  return acc;
+}
+
+/**
+ * Import account package from a remote URL (fetch JSON).
+ */
+export async function importAccountFromUrl(url, password, opts = {}) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch package: " + res.status);
+  const pkg = await res.json();
+  return importAccount(pkg, password, opts);
+}
+
+
 export default {
   listAccounts,
   createAccount,
@@ -391,4 +606,9 @@ export default {
   deleteFileRecord,
   scheduleAutosave,
   loadAutosavedState,
+  changePassword,
+  changeUsername,
+  exportAccount,
+  importAccount,
+  importAccountFromUrl,
 };
