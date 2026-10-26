@@ -205,10 +205,10 @@ export async function unlink(path) {
   if (rec.blobId) {
     // blob delete left for later (IDB delete)
   }
-  const database = await accounts.getDB?.() || null;
+  
   // Direct delete via put with tombstone or we need a delete API
   // For now we mark deleted
-  await accounts.putFileRecord({ ...rec, deleted: true, type: "deleted" });
+  await accounts.deleteFileRecord(path);
 }
 
 export function resolveRelative(baseDir, rel) {
