@@ -14,7 +14,7 @@ import "./assets/settings.scss"; // reuse settings look for consistency
  * - Placeholder for mail & browser extensions
  */
 export const Accounts = () => {
-  const wnapp = useSelector((state) => state.apps.user);
+  const wnapp = useSelector((state) => state.apps.defender);
   const dispatch = useDispatch();
   const fileInputRef = useRef(null);
 
