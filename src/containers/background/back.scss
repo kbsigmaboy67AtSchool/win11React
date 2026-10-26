@@ -27,21 +27,24 @@
 }
 
 .lockscreen {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   min-width: 100vw;
   min-height: 100vh;
-  z-index: 1;
+  z-index: 9998;
   background-size: cover;
   background-repeat: no-repeat;
   display: flex;
   flex-direction: column;
   align-items: center;
   transition: all 1s ease-in-out;
+  pointer-events: auto;
 
   &[data-unlock="true"] {
     opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
   }
 
   &::after {
