@@ -25,7 +25,17 @@ defState.hz = 2;
 
 const appReducer = (state = defState, action) => {
   var tmpState = { ...state };
-  if (action.type == "EDGELINK") {
+  if (action.type == "FIREFOXURL") {
+    var fobj = { ...tmpState["firefox"] };
+    fobj.url = action.payload;
+    fobj.size = "mini";
+    fobj.hide = false;
+    fobj.max = true;
+    tmpState.hz += 1;
+    fobj.z = tmpState.hz;
+    tmpState["firefox"] = fobj;
+    return tmpState;
+  } else if (action.type == "EDGELINK") {
     var obj = { ...tmpState["edge"] };
     if (action.payload && action.payload.startsWith("http")) {
       obj.url = action.payload;
