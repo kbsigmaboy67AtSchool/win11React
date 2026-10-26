@@ -69,7 +69,7 @@ export const BootScreen = (props) => {
 
 export const LockScreen = (props) => {
   const wall = useSelector((state) => state.wallpaper);
-  const [lock, setLock] = useState(false);
+  const [lock, setLock] = useState(true); // show account picker immediately
   const [unlocked, setUnLock] = useState(false);
   const [password, setPass] = useState("");
   const [error, setError] = useState("");
