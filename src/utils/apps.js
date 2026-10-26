@@ -29,6 +29,12 @@ const apps = [
     action: "SETTINGS",
   },
   {
+    name: "Accounts",
+    icon: "user",
+    type: "app",
+    action: "ACCOUNTS",
+  },
+  {
     name: "Task Manager",
     icon: "taskmanager",
     type: "app",
