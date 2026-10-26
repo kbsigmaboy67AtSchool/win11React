@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Icon, Image, ToolBar } from "../../../utils/general";
 import { dispatchAction, handleFileOpen } from "../../../actions";
+import accounts from "../../../utils/vfs/accounts";
+import fs from "../../../utils/vfs/fs";
+import wasmProcessor from "../../../utils/vfs/wasm-processor";
 import "./assets/fileexpo.scss";
 
 const NavTitle = (props) => {
@@ -269,8 +272,35 @@ const ContentArea = ({ searchtxt }) => {
   const files = useSelector((state) => state.files);
   const special = useSelector((state) => state.files.data.special);
   const [selected, setSelect] = useState(null);
+  const [vfsItems, setVfsItems] = useState(null); // null = classic mode
   const fdata = files.data.getId(files.cdir);
   const dispatch = useDispatch();
+
+  // Detect VFS path (real filesystem path or special that maps to VFS)
+  const isVfsPath =
+    typeof files.cdir === "string" &&
+    (files.cdir.startsWith("/") || files.cdir === "%vfs%");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadVfs() {
+      if (!isVfsPath || !accounts.isUnlocked()) {
+        setVfsItems(null);
+        return;
+      }
+      try {
+        const path = files.cdir === "%vfs%" ? "/" : files.cdir;
+        const kids = await fs.readdir(path);
+        if (!cancelled) setVfsItems(kids.filter((k) => k.type !== "deleted"));
+      } catch (e) {
+        if (!cancelled) setVfsItems([]);
+      }
+    }
+    loadVfs();
+    return () => {
+      cancelled = true;
+    };
+  }, [files.cdir, isVfsPath]);
 
   const handleClick = (e) => {
     e.stopPropagation();
@@ -292,6 +322,56 @@ const ContentArea = ({ searchtxt }) => {
     }
   };
 
+  const iconFor = (item) => {
+    if (item.type === "folder") return "icon/win/folder";
+    const n = (item.name || "").toLowerCase();
+    if (n.endsWith(".html") || n.endsWith(".htm")) return "icon/win/html";
+    if (n.endsWith(".txt") || n.endsWith(".md")) return "icon/win/txt";
+    if (n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".gif") || n.endsWith(".webp"))
+      return "icon/win/pic";
+    if (n.endsWith(".zip")) return "icon/win/zip";
+    if (n.endsWith(".js") || n.endsWith(".jsx") || n.endsWith(".ts") || n.endsWith(".tsx"))
+      return "icon/win/js";
+    return "icon/win/file";
+  };
+
+  // VFS listing
+  if (isVfsPath && vfsItems !== null) {
+    const filtered = vfsItems.filter((item) =>
+      (item.name || "").toLowerCase().includes((searchtxt || "").toLowerCase())
+    );
+    return (
+      <div
+        className="contentarea"
+        onClick={emptyClick}
+        onKeyDown={handleKey}
+        tabIndex="-1"
+      >
+        <div className="contentwrap win11Scroll">
+          <div className="gridshow" data-size="lg">
+            {filtered.map((item, i) => (
+              <div
+                key={item.path || i}
+                className="conticon hvtheme flex flex-col items-center prtclk"
+                data-id={item.path}
+                data-focus={selected == item.path}
+                onClick={handleClick}
+                onDoubleClick={handleDouble}
+              >
+                <Image src={iconFor(item)} />
+                <span>{item.name}</span>
+              </div>
+            ))}
+          </div>
+          {filtered.length === 0 ? (
+            <span className="text-xs mx-auto">This folder is empty.</span>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  // Classic Bin listing (unchanged look)
   return (
     <div
       className="contentarea"
@@ -301,7 +381,7 @@ const ContentArea = ({ searchtxt }) => {
     >
       <div className="contentwrap win11Scroll">
         <div className="gridshow" data-size="lg">
-          {fdata.data.map((item, i) => {
+          {(fdata?.data || []).map((item, i) => {
             return (
               item.name.includes(searchtxt) && (
                 <div
@@ -319,7 +399,7 @@ const ContentArea = ({ searchtxt }) => {
             );
           })}
         </div>
-        {fdata.data.length == 0 ? (
+        {(fdata?.data || []).length == 0 ? (
           <span className="text-xs mx-auto">This folder is empty.</span>
         ) : null}
       </div>
@@ -363,6 +443,7 @@ const NavPane = ({}) => {
           <Dropdown icon="vid" title="Videos" spid="%videos%" />
           <Dropdown icon="disc" title="OS (C:)" spid="%cdrive%" />
           <Dropdown icon="disk" title="Blue (D:)" spid="%ddrive%" />
+          <Dropdown icon="disc" title="Local Disk (VFS)" spid="%vfs%" />
         </Dropdown>
       </div>
     </div>
