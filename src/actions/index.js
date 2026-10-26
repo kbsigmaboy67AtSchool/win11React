@@ -290,13 +290,16 @@ export const handleFileOpen = async (id) => {
       const name = (rec.name || "").toLowerCase();
       if (name.endsWith(".html") || name.endsWith(".htm") || rec.mime === "text/html") {
         const prepared = await wasmProcessor.prepareHtmlMultifile(path, fs);
-        // Open Edge / Browser with the blob URL
+        // Open in Firefox multi-tab browser (blob / local file)
         store.dispatch({
-          type: "EDGELINK",
+          type: "FIREFOX",
+          payload: "full",
+        });
+        // Stash URL for Firefox to pick up
+        store.dispatch({
+          type: "FIREFOXURL",
           payload: prepared.blobUrl,
         });
-        // Ensure Edge app is visible
-        store.dispatch({ type: "EDGUE", payload: "open" });
         return;
       }
 
