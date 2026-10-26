@@ -30,13 +30,13 @@ const apps = [
   },
   {
     name: "Accounts",
-    icon: "user",
+    icon: "defender",
     type: "app",
     action: "ACCOUNTS",
   },
   {
     name: "Local Chat",
-    icon: "chat",
+    icon: "code",
     type: "app",
     action: "CHAT",
   },
