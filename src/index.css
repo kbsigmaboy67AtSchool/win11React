@@ -152,7 +152,7 @@ i[data-flip="true"] {
   width: 100vw;
   height: calc(100vh - 48px);
   top: 0;
-  overflow: visible; /* was hidden — clipped window title bars */
+  overflow: hidden;
 }
 
 .dpShad {
