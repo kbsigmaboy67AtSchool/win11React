@@ -132,6 +132,10 @@ function App() {
         dispatch({ type: "WALLBOOTED" });
       }, 5000);
     }
+    // Require real account unlock every load (ignore stale localStorage locked=false)
+    if (!accounts.isUnlocked()) {
+      dispatch({ type: "WALLALOCK" });
+    }
   });
 
   // Encrypted auto-save when an account is unlocked
@@ -144,12 +148,30 @@ function App() {
     return () => unsub();
   }, [store]);
 
+
+  // When OS locks, clear in-memory account session (n3xn-style)
+  useEffect(() => {
+    if (wall.locked && accounts.isUnlocked()) {
+      accounts.logout();
+    }
+  }, [wall.locked]);
+
   return (
     <div className="App">
       <ErrorBoundary FallbackComponent={ErrorFallback}>
         {!wall.booted ? <BootScreen dir={wall.dir} /> : null}
-        {wall.locked ? <LockScreen dir={wall.dir} /> : null}
-        <div className="appwrap">
+        {/* Always show sign-in until a real AES-GCM account session is unlocked */}
+        {(wall.locked || !accounts.isUnlocked()) && (
+          <LockScreen dir={wall.dir} />
+        )}
+        <div
+          className="appwrap"
+          style={
+            wall.locked || !accounts.isUnlocked()
+              ? { pointerEvents: "none", filter: "none" }
+              : undefined
+          }
+        >
           <Background />
           <div className="desktop" data-menu="desk">
             <DesktopApp />
