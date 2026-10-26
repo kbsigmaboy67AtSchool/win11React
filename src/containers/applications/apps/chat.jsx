@@ -10,7 +10,7 @@ import accounts from "../../../utils/vfs/accounts";
 const CHAT_KEY = "local_chat_messages";
 
 export const Chat = () => {
-  const wnapp = useSelector((state) => state.apps.chat);
+  const wnapp = useSelector((state) => state.apps.code);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [ready, setReady] = useState(false);
