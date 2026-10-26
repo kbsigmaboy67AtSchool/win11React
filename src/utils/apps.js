@@ -35,6 +35,12 @@ const apps = [
     action: "ACCOUNTS",
   },
   {
+    name: "Firefox",
+    icon: "firefox",
+    type: "app",
+    action: "FIREFOX",
+  },
+  {
     name: "Local Chat",
     icon: "code",
     type: "app",
