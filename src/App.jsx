@@ -17,6 +17,8 @@ import Taskbar from "./components/taskbar";
 import { Background, BootScreen, LockScreen } from "./containers/background";
 
 import { loadSettings } from "./actions";
+import accounts from "./utils/vfs/accounts";
+import { useStore } from "react-redux";
 import * as Applications from "./containers/applications";
 import * as Drafts from "./containers/applications/draft";
 
@@ -135,6 +137,17 @@ function App() {
       }, 5000);
     }
   });
+
+  // Encrypted auto-save of Redux state every few seconds when an account is unlocked
+  const store = useStore();
+  useEffect(() => {
+    const unsub = store.subscribe(() => {
+      if (accounts.isUnlocked()) {
+        accounts.scheduleAutosave(() => store.getState(), 4000);
+      }
+    });
+    return () => unsub();
+  }, [store]);
 
   return (
     <div className="App">
