@@ -90,10 +90,11 @@ const appReducer = (state = defState, action) => {
         tmpState = { ...state };
 
         if (action.payload == "full") {
-          // Open windowed (mini) so title bar is always on-screen; user can maximize
+          // Always open windowed with clean geometry (no stale dim/inline offset)
           obj.size = "mini";
           obj.hide = false;
           obj.max = true;
+          obj.dim = null;
           tmpState.hz += 1;
           obj.z = tmpState.hz;
         } else if (action.payload == "close") {
