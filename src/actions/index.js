@@ -255,12 +255,77 @@ export const loadSettings = () => {
 };
 
 // mostly file explorer
-export const handleFileOpen = (id) => {
-  // handle double click open
-  const item = store.getState().files.data.getId(id);
+export const handleFileOpen = async (id) => {
+  // handle double click open — classic Bin folders + VFS files
+  const state = store.getState();
+  const item = state.files.data.getId(id);
+
+  // Classic explorer folder navigation
   if (item != null) {
     if (item.type == "folder") {
       store.dispatch({ type: "FILEDIR", payload: item.id });
+      return;
+    }
+    // Classic file types (future: open notepad etc.)
+  }
+
+  // VFS path open (id looks like a real path)
+  if (typeof id === "string" && (id.startsWith("/") || id.startsWith("%"))) {
+    try {
+      const { default: fs } = await import("../utils/vfs/fs");
+      const { default: wasmProcessor } = await import("../utils/vfs/wasm-processor");
+      const { default: accounts } = await import("../utils/vfs/accounts");
+      if (!accounts.isUnlocked()) return;
+
+      const path = id.startsWith("%") ? (fs.SPECIAL[id] || id) : id;
+      const rec = await fs.stat(path);
+      if (!rec) return;
+
+      if (rec.type === "folder") {
+        store.dispatch({ type: "FILEDIR", payload: path });
+        return;
+      }
+
+      // Open HTML with multi-file relative support
+      const name = (rec.name || "").toLowerCase();
+      if (name.endsWith(".html") || name.endsWith(".htm") || rec.mime === "text/html") {
+        const prepared = await wasmProcessor.prepareHtmlMultifile(path, fs);
+        // Open Edge / Browser with the blob URL
+        store.dispatch({
+          type: "EDGELINK",
+          payload: prepared.blobUrl,
+        });
+        // Ensure Edge app is visible
+        store.dispatch({ type: "EDGUE", payload: "open" });
+        return;
+      }
+
+      // Text / code → Notepad
+      if (
+        name.endsWith(".txt") ||
+        name.endsWith(".md") ||
+        name.endsWith(".js") ||
+        name.endsWith(".css") ||
+        name.endsWith(".json") ||
+        (rec.mime && rec.mime.startsWith("text/"))
+      ) {
+        const text = await fs.readFile(path, true);
+        store.dispatch({ type: "NOTEPAD", payload: "open" });
+        // Store content for notepad to pick up (simple global for now)
+        window.__vfsOpenContent = { path, text, name: rec.name };
+        return;
+      }
+
+      // Images → open in new tab / edge
+      if (rec.mime && rec.mime.startsWith("image/")) {
+        const data = await fs.readFile(path, false);
+        const url = wasmProcessor.createBlobUrl(data, rec.mime);
+        store.dispatch({ type: "EDGELINK", payload: url });
+        store.dispatch({ type: "EDGUE", payload: "open" });
+        return;
+      }
+    } catch (err) {
+      console.warn("VFS open failed", err);
     }
   }
 };
