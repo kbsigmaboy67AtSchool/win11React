@@ -151,22 +151,11 @@ function App() {
   }, [store]);
 
 
-  // After unlock: clear stale inline geometry on app windows + reflow
+  // After unlock: one-time reflow (do not strip transforms every frame — preserves open/close animation)
   useEffect(() => {
     if (!wall.locked && accounts.isUnlocked()) {
-      requestAnimationFrame(() => {
-        document.querySelectorAll(".floatTab").forEach((el) => {
-          // Only clear if not a user-resized cstm window with intentional dim
-          if (el.getAttribute("data-size") !== "cstm") {
-            el.style.top = "";
-            el.style.left = "";
-            el.style.width = "";
-            el.style.height = "";
-            el.style.transform = "";
-          }
-        });
-        window.dispatchEvent(new Event("resize"));
-      });
+      const t = setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
+      return () => clearTimeout(t);
     }
   }, [wall.locked]);
 
@@ -178,19 +167,6 @@ function App() {
   }, [wall.locked]);
 
 
-  // Whenever an app is shown, clear leftover inline offsets (drag/resize residue)
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      document.querySelectorAll('.floatTab[data-hide="false"], .floatTab:not([data-hide="true"])').forEach((el) => {
-        if (el.getAttribute("data-size") === "cstm") return;
-        el.style.top = "";
-        el.style.left = "";
-        el.style.width = "";
-        el.style.height = "";
-        el.style.transform = "";
-      });
-    });
-  }, [apps]);
 
   const showLock = wall.locked || !accounts.isUnlocked();
 
