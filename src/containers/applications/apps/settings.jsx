@@ -27,6 +27,42 @@ export const Settings = () => {
     ThemeC: "light",
   };
 
+  
+  const handleTileClick = (name) => {
+    const n = (name || "").toLowerCase();
+    if (n === "colours" || n === "themes") {
+      // Toggle light/dark theme
+      changeTheme();
+      return;
+    }
+    if (n === "background") {
+      // Cycle wallpapers simply
+      const themes = wall.themes || [];
+      if (themes.length) {
+        const cur = wall.src || "";
+        let idx = themes.findIndex((t) => cur.includes(t));
+        idx = (idx + 1) % themes.length;
+        dispatch({ type: "WALLSET", payload: themes[idx] + "/img0.jpg" });
+      }
+      return;
+    }
+    if (n === "display") {
+      // Toggle night light as a visible effect
+      dispatch({ type: "STNGTOGG", payload: "system.display.nightlight.state" });
+      return;
+    }
+    if (n === "sound") {
+      // Placeholder volume toggle visual
+      dispatch({ type: "STNGTOGG", payload: "system.power.saver.state" });
+      return;
+    }
+    if (n === "storage") {
+      // Could open VFS stats later
+      setPage("System");
+      return;
+    }
+  };
+
   const handleWallAndTheme = (e) => {
     var payload = e.target.dataset.payload;
     var theme_nxt = themechecker[payload.split("/")[0]],
@@ -316,7 +352,11 @@ export const Settings = () => {
                         case "tile square":
                         case "tile thin-blue":
                           return (
-                            <div key={e.name} className={e.type}>
+                            <div
+                              key={e.name}
+                              className={e.type + " cursor-pointer"}
+                              onClick={() => handleTileClick(e.name)}
+                            >
                               <span className="settingsIcon">{e.icon}</span>
                               <div>
                                 <p>{e.name}</p>
