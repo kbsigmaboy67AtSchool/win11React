@@ -125,6 +125,7 @@ function App() {
     dispatch({ type: "WALLBOOTED" });
   };
 
+  // Mount only — never re-run on every render (that caused React #185 infinite loop)
   useEffect(() => {
     if (!window.onstart) {
       loadSettings();
@@ -132,11 +133,12 @@ function App() {
         dispatch({ type: "WALLBOOTED" });
       }, 5000);
     }
-    // Require real account unlock every load (ignore stale localStorage locked=false)
+    // Force lock once on load if no account session
     if (!accounts.isUnlocked()) {
       dispatch({ type: "WALLALOCK" });
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Encrypted auto-save when an account is unlocked
   useEffect(() => {
@@ -148,7 +150,6 @@ function App() {
     return () => unsub();
   }, [store]);
 
-
   // When OS locks, clear in-memory account session (n3xn-style)
   useEffect(() => {
     if (wall.locked && accounts.isUnlocked()) {
@@ -156,21 +157,16 @@ function App() {
     }
   }, [wall.locked]);
 
+  const showLock = wall.locked || !accounts.isUnlocked();
+
   return (
     <div className="App">
       <ErrorBoundary FallbackComponent={ErrorFallback}>
         {!wall.booted ? <BootScreen dir={wall.dir} /> : null}
-        {/* Always show sign-in until a real AES-GCM account session is unlocked */}
-        {(wall.locked || !accounts.isUnlocked()) && (
-          <LockScreen dir={wall.dir} />
-        )}
+        {showLock ? <LockScreen dir={wall.dir} /> : null}
         <div
           className="appwrap"
-          style={
-            wall.locked || !accounts.isUnlocked()
-              ? { pointerEvents: "none", filter: "none" }
-              : undefined
-          }
+          style={showLock ? { pointerEvents: "none" } : undefined}
         >
           <Background />
           <div className="desktop" data-menu="desk">
