@@ -52,6 +52,8 @@ const wallReducer = (state = defState, action) => {
         src: walls[twps],
       };
     case "WALLALOCK":
+      localStorage.setItem("locked", true);
+      if (state.locked) return state; // avoid infinite re-renders
       return {
         ...state,
         locked: true,
