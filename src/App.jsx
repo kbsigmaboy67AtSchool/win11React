@@ -150,6 +150,16 @@ function App() {
     return () => unsub();
   }, [store]);
 
+
+  // Force layout reflow after unlock (fixes windows needing Search opened first)
+  useEffect(() => {
+    if (!wall.locked && accounts.isUnlocked()) {
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+    }
+  }, [wall.locked]);
+
   // When OS locks, clear in-memory account session (n3xn-style)
   useEffect(() => {
     if (wall.locked && accounts.isUnlocked()) {
