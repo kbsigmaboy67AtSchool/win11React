@@ -1,1 +1,5 @@
-/*  /index.html  200
+# Static GUST apps — never SPA-fallback these
+/gust/*  /gust/:splat  200
+
+# SPA shell for everything else
+/*    /index.html   200
