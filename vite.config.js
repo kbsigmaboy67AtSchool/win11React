@@ -31,8 +31,12 @@ const config = ({ mode }) => {
           ],
         },
         workbox: {
+          // Allow large GUST single-file apps (~3.7MB each) to be precached offline
+          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
           globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff,woff2,json}"],
           navigateFallback: "index.html",
+          // Critical: do NOT SPA-fallback /gust/* or the iframe loads the Win11 shell
+          navigateFallbackDenylist: [/^\/gust\//, /^\/assets\//, /^\/img\//, /^\/font\//],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
