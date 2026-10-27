@@ -6446,6 +6446,24 @@
 
                             
                             <div class="settings-section" data-section="connection">
+
+                                <div class="settings-card" id="settingsDirectIframeCard">
+                                    <div class="settings-card-head"><i class="fas fa-window-maximize"></i> Direct Iframe Browse
+                                    </div>
+                                    <div class="settings-card-body">
+                                        <div class="settings-switch-row">
+                                            <div>
+                                                <div class="settings-switch-label">Normal iframe mode (same-origin proxy)</div>
+                                                <div class="settings-hint">When enabled, pages load with a normal <code>iframe.src</code> instead of the WISP/libcurl rewriter. Assumes an OS-level same-origin proxy so the frame is fully accessible (cookies, DOM, storage). Without a proxy, many sites still load if they allow framing; advanced GUST rewrite features stay available when this is off.</div>
+                                            </div>
+                                            <div class="settings-switch" id="settingsDirectIframeSwitch">
+                                                <div class="settings-switch-track"><div class="settings-switch-thumb"></div></div>
+                                            </div>
+                                        </div>
+                                        <div class="settings-hint" id="settingsDirectIframeStatus" style="margin-top:10px;">Mode: WISP proxy (default)</div>
+                                    </div>
+                                </div>
+
                                 <div class="settings-card">
                                     <div class="settings-card-head"><i class="fas fa-network-wired"></i> WISP Server
                                     </div>
@@ -11094,6 +11112,51 @@ window._libcurlReady = true;
             // Multi-WISP round-robin. Default ON (unset → enabled): '0' is the only
             // off value, so a fresh install gets pool resilience without opting in.
             function poolModeOn() { try { return ls.getItem('gust:wisp:poolmode:v1') !== '0'; } catch { return true; } }
+
+            function directIframeModeOn() {
+                try { return ls.getItem('gust:direct-iframe:v1') === '1'; } catch { return false; }
+            }
+            function setDirectIframeMode(on) {
+                try { ls.setItem('gust:direct-iframe:v1', on ? '1' : '0'); } catch (_) {}
+                try {
+                    const s = document.getElementById('settingsDirectIframeSwitch');
+                    if (s) s.classList.toggle('on', !!on);
+                    const st = document.getElementById('settingsDirectIframeStatus');
+                    if (st) st.textContent = on
+                        ? 'Mode: Direct iframe (same-origin proxy / native frame)'
+                        : 'Mode: WISP proxy (default)';
+                } catch (_) {}
+            }
+            function wireDirectIframeSwitch() {
+                const s = document.getElementById('settingsDirectIframeSwitch');
+                if (!s || s.dataset.wired) return;
+                s.dataset.wired = '1';
+                s.classList.toggle('on', directIframeModeOn());
+                setDirectIframeMode(directIframeModeOn());
+                s.addEventListener('click', () => {
+                    const nowOn = !directIframeModeOn();
+                    setDirectIframeMode(nowOn);
+                    try { if (typeof gxPlay === 'function') gxPlay(nowOn ? 'LIMITER_OFF' : 'LIMITER_ON'); } catch (_) {}
+                    try { log(nowOn ? 'Direct iframe browse enabled' : 'WISP proxy browse restored', 'info'); } catch (_) {}
+                });
+            }
+            // Wire when DOM ready / settings opened
+            try {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', wireDirectIframeSwitch);
+                } else {
+                    setTimeout(wireDirectIframeSwitch, 0);
+                }
+            } catch (_) {}
+
+            window.addEventListener('message', function (ev) {
+                try {
+                    if (!ev || !ev.data || ev.data.type !== 'gust-direct-nav') return;
+                    if (typeof go === 'function' && ev.data.url) go(ev.data.url, true);
+                } catch (_) {}
+            });
+
+
             function probeWispLatency(url, ms = 6000) {
                 return new Promise(resolve => {
                     const t0 = performance.now();
@@ -18956,8 +19019,66 @@ _VIEWER_DL_JS +
                     return;
                 }
 
+
                 isErrorPage = false;
 
+                // ── Direct iframe browse mode (OS same-origin proxy / native frame) ──
+                // Does not remove WISP path — only short-circuits when the user enables it.
+                if (directIframeModeOn() && /^https?:\/\//i.test(url) && method === 'GET' && !body) {
+                    const prevCtrlD = tabAbortControllers.get(initiatorTabId);
+                    if (prevCtrlD) prevCtrlD.abort();
+                    tabAbortControllers.delete(initiatorTabId);
+
+                    if (activeTabId === initiatorTabId) {
+                        try { hideNewTab(); } catch (_) {}
+                        try { hideSettingsPage(); } catch (_) {}
+                        try { hideDiscordFrame(); } catch (_) {}
+                        frame.removeAttribute('srcdoc');
+                        _blobLoadPending = true;
+                        pageUrl = url;
+                        urlInput.value = url;
+                        updateTabUrl(url);
+                        try { updateSecurityChip(url); } catch (_) {}
+                        try { updateBookmarkButton(); } catch (_) {}
+                        setStatus('ok', 'Direct');
+                        log(`<i class="fas fa-window-maximize" style="color:var(--ac)"></i> ` + url + ` <span style="color:var(--tx3);font-size:11px">direct iframe</span>`, 'info');
+
+                        frame.onload = function () {
+                            _blobLoadPending = false;
+                            if (activeTabId !== initiatorTabId) return;
+                            try {
+                                const doc = frame.contentDocument;
+                                if (doc && doc.title) setTabTitle(doc.title);
+                                // Same-origin proxy: full DOM access — inject GUST helper hook
+                                if (doc && !doc.getElementById('__gustDirectHook')) {
+                                    const s = doc.createElement('script');
+                                    s.id = '__gustDirectHook';
+                                    s.textContent = `(function(){try{document.addEventListener('click',function(e){var a=e.target&&e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href');if(!h||h.startsWith('#')||h.startsWith('javascript:'))return;try{var abs=new URL(h,location.href).href;if(/^https?:/i.test(abs)){parent.postMessage({type:'gust-direct-nav',url:abs},'*');e.preventDefault();}}catch(err){}}},true);}catch(e){}})();`;
+                                    (doc.head || doc.documentElement).appendChild(s);
+                                }
+                            } catch (err) {
+                                // Cross-origin without proxy — title unavailable; page may still render
+                            }
+                            setStatus('ok', 'Done');
+                        };
+                        frame.onerror = function () {
+                            _blobLoadPending = false;
+                            setStatus('error', 'Frame error');
+                        };
+                        frame.src = url;
+                    }
+
+                    if (push) {
+                        hist = hist.slice(0, histIdx + 1);
+                        if (hist.length === 0) hist.push(HOME_INTERNAL);
+                        hist.push(url);
+                        histIdx = hist.length - 1;
+                        updateNav();
+                    }
+                    updateTabUrl(url);
+                    renderTabs();
+                    return;
+                }
                 const prevCtrl = tabAbortControllers.get(initiatorTabId);
                 if (prevCtrl) prevCtrl.abort();
                 const tabCtrl = new AbortController();
@@ -21641,6 +21762,7 @@ _VIEWER_DL_JS +
             function showSettingsPage(push = true, section = null) {
                 const settingsEl = $("settingsPage");
                 if (!settingsEl) return;
+                try { if (typeof wireDirectIframeSwitch === 'function') wireDirectIframeSwitch(); } catch (_) {}
 
                 if (!section && pageUrl && pageUrl.startsWith("gust://settings/")) {
                     section = pageUrl.replace("gust://settings/", "");
