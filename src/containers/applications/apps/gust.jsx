@@ -1,12 +1,13 @@
-import React from "react";
+import React, { useState } from "react";
 import { useSelector } from "react-redux";
 import { ToolBar } from "../../../utils/general";
 
 /**
- * GUST Official Unblocker — loads vendored single-file app from /gust/official.html
+ * GUST Official Unblocker — static single-file app from /gust/official.html
  */
 export const Gust = () => {
   const wnapp = useSelector((state) => state.apps.gust);
+  const [status, setStatus] = useState("Loading GUST…");
   if (!wnapp) return null;
 
   return (
@@ -30,19 +31,43 @@ export const Gust = () => {
         invert
       />
       <div className="windowScreen flex flex-col" data-dock="true">
-        <iframe
-          title="GUST Official Unblocker"
-          src="./gust/official.html"
-          style={{
-            flex: 1,
-            width: "100%",
-            height: "100%",
-            border: "none",
-            background: "#0b1220",
-          }}
-          allow="clipboard-read; clipboard-write; fullscreen; storage-access"
-          sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-downloads allow-pointer-lock"
-        />
+        <div
+          className="restWindow flex-grow"
+          style={{ position: "relative", minHeight: 0, overflow: "hidden" }}
+        >
+          {status && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#9de5ff",
+                fontSize: 13,
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+            >
+              {status}
+            </div>
+          )}
+          <iframe
+            title="GUST Official Unblocker"
+            src="/gust/official.html"
+            onLoad={() => setStatus("")}
+            onError={() => setStatus("Failed to load GUST (check /gust/official.html)")}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              border: "none",
+              background: "#0b1220",
+            }}
+            allow="clipboard-read; clipboard-write; fullscreen; storage-access; autoplay"
+          />
+        </div>
       </div>
     </div>
   );
