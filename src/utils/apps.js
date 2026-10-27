@@ -41,6 +41,18 @@ const apps = [
     action: "FIREFOX",
   },
   {
+    name: "GUST",
+    icon: "gust",
+    type: "app",
+    action: "GUST",
+  },
+  {
+    name: "GUST Lite",
+    icon: "gustlite",
+    type: "app",
+    action: "GUSTLITE",
+  },
+  {
     name: "Local Chat",
     icon: "code",
     type: "app",
