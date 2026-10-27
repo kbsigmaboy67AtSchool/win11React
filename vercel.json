@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    { "source": "/gust/(.*)", "destination": "/gust/$1" },
+    { "source": "/((?!gust/|assets/|img/|font/|locales/|favicon).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/gust/(.*)",
+      "headers": [
+        { "key": "Content-Type", "value": "text/html; charset=utf-8" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
+      ]
+    }
+  ]
+}
