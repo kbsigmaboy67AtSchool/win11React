@@ -53,6 +53,12 @@ const apps = [
     action: "GUSTLITE",
   },
   {
+    name: "Ambience Studio",
+    icon: "ambience",
+    type: "app",
+    action: "AMBIENCE",
+  },
+  {
     name: "Local Chat",
     icon: "code",
     type: "app",
