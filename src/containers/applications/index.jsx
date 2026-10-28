@@ -11,6 +11,7 @@ export * from "./apps/discord";
 export * from "./apps/edge";
 export * from "./apps/gust";
 export * from "./apps/gustlite";
+export * from "./apps/ambience";
 export * from "./apps/firefox";
 export * from "./apps/explorer";
 export * from "./apps/getstarted";
